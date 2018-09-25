@@ -29,3 +29,5 @@
 
 * Docker Remote API 版本历史: <https://docs.docker.com/engine/api/version-history/>  
   此页可以看到 Docker Remote API 版本变更, 并提供各个 API 版本文档的入口  
+
+* [远程连接docker daemon，Docker Remote API](https://deepzz.com/post/dockerd-and-docker-remote-api.html)
