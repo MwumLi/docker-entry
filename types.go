@@ -49,6 +49,15 @@ func (e *ServerError) Error() string {
 }
 
 type HijackedResponse struct {
-	Conn  net.Conn
-	bufrw *bufio.ReadWriter
+	Conn net.Conn
+	Br   *bufio.Reader
+}
+
+type Configuration struct {
+	App_keys           map[string]string
+	Enable_sign        bool
+	Docker_proto       string
+	Docker_serve_port  int
+	Docker_api_version string
+	Listen             string
 }

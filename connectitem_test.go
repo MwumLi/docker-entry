@@ -11,7 +11,7 @@ func TestExec(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	res, err := c.exec()
+	res, err := c.Exec()
 	if err != nil {
 		if sErr, ok := err.(*ServerError); ok {
 			t.Fatalf("\nStatusCode: %d\nMessage: %s\n", sErr.StatusCode, sErr.Message)

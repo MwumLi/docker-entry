@@ -1,23 +1,20 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net"
 	"net/http"
-	"net/http/httputil"
 	"net/url"
 	"path"
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/docker/docker/api/types"
 )
 
-type connectItem struct {
+type Connect struct {
 	// proto holds the Docker Engine REST API protocol i.e. http.
 	proto string
 	// node holds the host of docker Node
@@ -36,13 +33,13 @@ type connectItem struct {
 	tokenEffect bool
 }
 
-func NewConnectItemWithOpts(ops ...func(*connectItem) error) (*connectItem, error) {
+func NewConnectItemWithOpts(ops ...func(*Connect) error) (*Connect, error) {
 
-	c := &connectItem{
+	c := &Connect{
 		proto:   "http",
 		port:    2375,
 		version: "v1.25",
-		shell:   "bash",
+		shell:   "sh",
 	}
 
 	for _, op := range ops {
@@ -54,29 +51,29 @@ func NewConnectItemWithOpts(ops ...func(*connectItem) error) (*connectItem, erro
 	return c, nil
 }
 
-func withVersion(version string) func(*connectItem) error {
-	return func(c *connectItem) error {
+func withVersion(version string) func(*Connect) error {
+	return func(c *Connect) error {
 		c.version = version
 		return nil
 	}
 }
 
-func withPort(port int) func(*connectItem) error {
-	return func(c *connectItem) error {
-		c.port = port
-		return nil
-	}
-}
-
-func withNode(node string) func(*connectItem) error {
-	return func(c *connectItem) error {
+func withNode(node string) func(*Connect) error {
+	return func(c *Connect) error {
 		c.node = node
 		return nil
 	}
 }
 
-func withContainer(container string) func(*connectItem) error {
-	return func(c *connectItem) error {
+func withPort(port int) func(*Connect) error {
+	return func(c *Connect) error {
+		c.port = port
+		return nil
+	}
+}
+
+func withContainer(container string) func(*Connect) error {
+	return func(c *Connect) error {
 		c.container = container
 		return nil
 	}
@@ -94,7 +91,7 @@ func encodeData(data interface{}) (*bytes.Buffer, error) {
 
 // getAPIPath returns the versioned request path to call the api.
 // It appends the query parameters to the path if they are not empty.
-func (c *connectItem) getAPIPath(p string, query url.Values) string {
+func (c *Connect) getAPIPath(p string, query url.Values) string {
 	var apiPath string
 	if c.version != "" {
 		v := strings.TrimPrefix(c.version, "v")
@@ -106,7 +103,7 @@ func (c *connectItem) getAPIPath(p string, query url.Values) string {
 	return (&url.URL{Scheme: c.proto, Host: host, Path: apiPath, RawQuery: query.Encode()}).String()
 }
 
-func (c *connectItem) exec() (string, error) {
+func (c *Connect) Exec() (string, error) {
 	var response IDResponse
 
 	req := ExecConfig{
@@ -122,7 +119,10 @@ func (c *connectItem) exec() (string, error) {
 	reqJson, _ := encodeData(req)
 
 	api := c.getAPIPath("containers/"+c.container+"/exec", url.Values{})
-	resp, err := http.Post(api, "application/json", reqJson)
+	client := &http.Client{
+		Timeout: 5 * time.Second,
+	}
+	resp, err := client.Post(api, "application/json", reqJson)
 	if err != nil {
 		return "", err
 	}
@@ -130,16 +130,15 @@ func (c *connectItem) exec() (string, error) {
 
 	err = json.NewDecoder(resp.Body).Decode(&response)
 
-	fmt.Println(resp.StatusCode)
 	if resp.StatusCode != 201 {
 		return "", &ServerError{resp.StatusCode, response.Message}
 	}
 
+	c.execId = response.Id
 	return response.Id, nil
 }
 
-func (c *connectItem) start() (*HijackedResponse, error) {
-	var params io.Reader
+func (c *Connect) Start() (*HijackedResponse, error) {
 	opts := ExecStartCheck{
 		Detach: false,
 		Tty:    false,
@@ -150,7 +149,7 @@ func (c *connectItem) start() (*HijackedResponse, error) {
 	}
 
 	api := c.getAPIPath("exec/"+c.execId+"/start", url.Values{})
-	req, err := http.NewRequest("POSt", api, encodeOpts)
+	req, err := http.NewRequest("POST", api, encodeOpts)
 	if err != nil {
 		return nil, err
 	}
@@ -158,7 +157,7 @@ func (c *connectItem) start() (*HijackedResponse, error) {
 	req.Header.Set("Connection", "Upgrade")
 	req.Header.Set("Upgrade", "tcp")
 
-	conn, err := net.Dial(c.proto, c.node+":"+strconv.Itoa(c.port))
+	conn, err := net.Dial("tcp", c.node+":"+strconv.Itoa(c.port))
 	if err != nil {
 		return nil, err
 	}
@@ -173,34 +172,25 @@ func (c *connectItem) start() (*HijackedResponse, error) {
 		tcpConn.SetKeepAlivePeriod(30 * time.Second)
 	}
 
-	clientconn := httputil.NewClientConn(conn, nil)
-	defer clientconn.Close()
+	if err = req.Write(conn); err != nil {
+		return nil, err
+	}
 
-	// Server hijacks the connection, error 'connection closed' expected
-	resp, err := clientconn.Do(req)
-	if err != httputil.ErrPersistEOF {
-		if err != nil {
+	br := bufio.NewReader(conn)
+	// ignore first response
+	for {
+		s := ""
+		if s, err = br.ReadString('\n'); err != nil {
 			return nil, err
-		}
-		if resp.StatusCode != http.StatusSwitchingProtocols {
-			resp.Body.Close()
-			return nil, fmt.Errorf("unable to upgrade to %s, received %d", proto, resp.StatusCode)
-		}
-	}
-
-	c, br := clientconn.Hijack()
-	if br.Buffered() > 0 {
-		// If there is buffered content, wrap the connection.  We return an
-		// object that implements CloseWrite iff the underlying connection
-		// implements it.
-		if _, ok := c.(types.CloseWriter); ok {
-			c = &hijackedConnCloseWriter{&hijackedConn{c, br}}
 		} else {
-			c = &hijackedConn{c, br}
+			s = strings.TrimSpace(s)
+			// fmt.Print("Discard " + s)
 		}
-	} else {
-		br.Reset(nil)
+		if len(s) <= 0 {
+			break
+		}
 	}
-
-	return &HijackedResponse{conn, bufrw}, nil
+	// first send '\r'
+	fmt.Fprint(conn, "\r")
+	return &HijackedResponse{conn, br}, nil
 }
