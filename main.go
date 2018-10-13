@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
@@ -9,6 +10,7 @@ import (
 	"net/http"
 	"sort"
 
+	"github.com/gorilla/websocket"
 	"github.com/julienschmidt/httprouter"
 )
 
@@ -20,6 +22,10 @@ const (
 var (
 	Connects map[string]*Connect
 	Config   Configuration
+	upgrader = websocket.Upgrader{
+		ReadBufferSize:  1024,
+		WriteBufferSize: 1024,
+	}
 )
 
 func init() {
@@ -31,6 +37,7 @@ func main() {
 	router := httprouter.New()
 	router.GET("/", Index)
 	router.POST("/api/sign/exec", apiSignExec)
+	router.GET("/ws/terminal/:token", wsTerminal)
 
 	fmt.Printf("Listen %s ...\n", Config.Listen)
 	log.Fatal(http.ListenAndServe(Config.Listen, router))
@@ -39,7 +46,59 @@ func main() {
 func Index(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	s := "Welcome\n"
 	s += "POST /api/sign/exec\n"
+	s += "GET /ws/terminal/:token http -> websocket\n"
 	fmt.Fprint(w, s)
+}
+
+func wsTerminal(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	token := ps.ByName("token")
+	item, ok := Connects[token]
+	if ok == false {
+		w.WriteHeader(404)
+		fmt.Fprintf(w, "Not Found or token '%s' has expired", token)
+		return
+	}
+	// 从全局栈中删除
+	delete(Connects, token)
+
+	// websocket
+	ws, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	defer ws.Close()
+
+	hj, err := item.Start()
+	if err != nil {
+		ws.CloseHandler()(1001, fmt.Sprintf("%s", err))
+		log.Println(err)
+		return
+	}
+	defer hj.Conn.Close()
+
+	// read data from docker and send it to websocket
+	go func() {
+		r := bufio.NewReader(hj.Br)
+		for {
+			data, err := r.ReadString('\n')
+			if err != nil {
+				break
+			}
+			ws.WriteMessage(websocket.TextMessage, []byte(data))
+			fmt.Printf("docker: %s\n", data)
+		}
+	}()
+
+	// read data from websocket and send it to docker
+	for {
+		_, data, err := ws.ReadMessage()
+		if err != nil {
+			break
+		}
+		fmt.Fprintf(hj.Conn, "%s", data)
+		fmt.Printf("websocket: %s %d\n", data, len(data))
+	}
 }
 
 func apiSignExec(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
@@ -113,6 +172,7 @@ func apiSignExec(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 
 	Connects[execId] = c // 运行时保存执行对象
 
+	log.Printf("ToTal: %d newId: %s\n", len(Connects), execId)
 	responseHandle(200, &reply{Token: execId})
 }
 
