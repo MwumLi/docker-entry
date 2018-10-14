@@ -61,3 +61,24 @@ type Configuration struct {
 	Docker_api_version string
 	Listen             string
 }
+
+const (
+	// DataMessage denotes a text data message. The text message payload is
+	// interpreted as UTF-8 encoded text data.
+	DataMessage = "data"
+
+	// ResizeMessage denotes a resize control message
+	ResizeMessage = "resize"
+)
+
+type WebsocketMessage struct {
+	Type string `json:"type"`
+
+	Data string `json:"data,omitempty"`
+
+	W int `json:"w,omitempty"`
+	H int `json:"h,omitempty"`
+
+	Errno int    `json:"errno,omitempty"`
+	Msg   string `json:"msg,omitempty"`
+}

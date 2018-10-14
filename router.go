@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"sort"
 
@@ -158,25 +159,53 @@ func wsTerminal(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	defer hj.Conn.Close()
 
 	// read data from docker and send it to websocket
-	go func() {
-		r := bufio.NewReader(hj.Br)
-		for {
-			data, err := r.ReadString('\n')
-			if err != nil {
-				break
-			}
-			ws.WriteMessage(websocket.TextMessage, []byte(data))
-			fmt.Printf("docker: %s\n", data)
-		}
-	}()
+	go readFromDockerToWS(ws, hj.Br)
 
 	// read data from websocket and send it to docker
+	readFromWSToDocker(ws, hj.Conn, item)
+}
+
+// read data from websocket and send it to docker
+func readFromWSToDocker(ws *websocket.Conn, docker net.Conn, c *Connect) {
 	for {
-		_, data, err := ws.ReadMessage()
+		var wm WebsocketMessage
+		if ws.ReadJSON(&wm) != nil {
+			break
+		}
+
+		switch wm.Type {
+		case DataMessage:
+			data := wm.Data
+			fmt.Fprintf(docker, "%s", data)
+			fmt.Printf("websocket: %s %d\n", data, len(data))
+		case ResizeMessage:
+			if err := c.Resize(wm.W, wm.H); err != nil {
+				wm = WebsocketMessage{
+					Type: ResizeMessage,
+					Msg:  err.Error(),
+				}
+
+				if v, ok := err.(*ServerError); ok {
+					wm.Errno = v.StatusCode
+				}
+				ws.WriteJSON(wm)
+			}
+		}
+	}
+}
+
+// read data from docker and send it to websocket
+func readFromDockerToWS(ws *websocket.Conn, docker *bufio.Reader) {
+	for {
+		data, err := docker.ReadString('\n')
 		if err != nil {
 			break
 		}
-		fmt.Fprintf(hj.Conn, "%s", data)
-		fmt.Printf("websocket: %s %d\n", data, len(data))
+		wm := WebsocketMessage{
+			Type: DataMessage,
+			Data: data,
+		}
+		ws.WriteJSON(wm)
+		fmt.Printf("docker: %s\n", data)
 	}
 }

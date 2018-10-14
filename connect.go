@@ -129,6 +129,9 @@ func (c *Connect) Exec() (string, error) {
 	defer resp.Body.Close()
 
 	err = json.NewDecoder(resp.Body).Decode(&response)
+	if err != nil {
+		return "", err
+	}
 
 	if resp.StatusCode != 201 {
 		return "", &ServerError{resp.StatusCode, response.Message}
@@ -213,6 +216,10 @@ func (c *Connect) Resize(w, h int) error {
 	defer resp.Body.Close()
 
 	err = json.NewDecoder(resp.Body).Decode(&response)
+
+	if err != nil {
+		return err
+	}
 
 	if resp.StatusCode != 201 {
 		return &ServerError{resp.StatusCode, response.Message}
