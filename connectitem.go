@@ -194,3 +194,29 @@ func (c *Connect) Start() (*HijackedResponse, error) {
 	fmt.Fprint(conn, "\r")
 	return &HijackedResponse{conn, br}, nil
 }
+
+func (c *Connect) Resize(w, h int) error {
+	var response IDResponse
+
+	query := url.Values{
+		"w": []string{strconv.Itoa(w)},
+		"h": []string{strconv.Itoa(h)},
+	}
+	api := c.getAPIPath("containers/"+c.container+"/exec", query)
+	client := &http.Client{
+		Timeout: 5 * time.Second,
+	}
+	resp, err := client.Post(api, "application/json", nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	err = json.NewDecoder(resp.Body).Decode(&response)
+
+	if resp.StatusCode != 201 {
+		return &ServerError{resp.StatusCode, response.Message}
+	}
+
+	return nil
+}
