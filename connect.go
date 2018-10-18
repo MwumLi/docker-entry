@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net"
 	"net/http"
 	"net/url"
@@ -102,7 +103,7 @@ func (c *Connect) getAPIPath(p string, query url.Values) string {
 	return (&url.URL{Scheme: c.proto, Host: host, Path: apiPath, RawQuery: query.Encode()}).String()
 }
 
-func (c *Connect) Exec() (string, error) {
+func (c *Connect) Exec() error {
 	var response IDResponse
 
 	req := ExecConfig{
@@ -123,21 +124,21 @@ func (c *Connect) Exec() (string, error) {
 	}
 	resp, err := client.Post(api, "application/json", reqJson)
 	if err != nil {
-		return "", err
+		return err
 	}
 	defer resp.Body.Close()
 
 	err = json.NewDecoder(resp.Body).Decode(&response)
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	if resp.StatusCode != 201 {
-		return "", &ServerError{resp.StatusCode, response.Message}
+		return &ServerError{resp.StatusCode, response.Message}
 	}
 
 	c.execId = response.Id
-	return response.Id, nil
+	return nil
 }
 
 func (c *Connect) Start() (*HijackedResponse, error) {
@@ -222,4 +223,8 @@ func (c *Connect) Resize(w, h int) error {
 	}
 
 	return nil
+}
+
+func (c *Connect) String() string {
+	return fmt.Sprintf("node: %s container: %s execId: %s", c.node, c.container, c.execId)
 }

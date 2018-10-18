@@ -10,6 +10,8 @@ import (
 	"net"
 	"net/http"
 	"sort"
+	"strconv"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/julienschmidt/httprouter"
@@ -115,17 +117,22 @@ func apiSignExec(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 		return
 	}
 
-	execId, err := c.Exec()
+	err = c.Exec()
 	if err != nil {
 		responseHandle(500, &reply{Message: fmt.Sprintf("%s", err)})
 		return
 	}
 
-	// save connect instance to Connects store
-	Connects[execId] = c
+	// generate token
+	ns := strconv.FormatInt(time.Now().UnixNano(), 10)
+	b := md5.Sum([]byte(c.String() + ns))
+	token := hex.EncodeToString(b[:])
 
-	log.Printf("ToTal: %d newId: %s\n", len(Connects), execId)
-	responseHandle(200, &reply{Token: execId})
+	// save connect instance to Connects store
+	Connects[token] = c
+
+	log.Printf("[Add]Token: %s Total: %d\n", token, len(Connects))
+	responseHandle(200, &reply{Token: token})
 }
 
 // http upgrade to websocket and  open a communication with docker client
@@ -163,7 +170,7 @@ func wsTerminal(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 
 	// read data from websocket and send it to docker
 	readFromWSToDocker(ws, hj.Conn, item)
-	log.Printf("ToTal: %d deleteId: %s\n", len(Connects), item.execId)
+	log.Printf("[Deleted]Token: %s Total: %d\n", token, len(Connects))
 }
 
 // read data from websocket and send it to docker
