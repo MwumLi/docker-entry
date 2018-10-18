@@ -40,7 +40,7 @@ type Connect struct {
 func NewConnectItemWithOpts(ops ...func(*Connect) error) (*Connect, error) {
 
 	c := &Connect{
-		proto:   "http",
+		proto:   Config.Docker_proto,
 		port:    2375,
 		version: "v1.25",
 		shell:   "sh",
