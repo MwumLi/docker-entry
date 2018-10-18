@@ -3,7 +3,7 @@
 使用 Docker Remote API 提供 Docker 容器远程终端服务
 
 
-![Show Docker Entry Setup](./static/imgs/docker-entry.png)
+![Show Docker Entry Setup](https://github.com/MwumLi/docker-entry/raw/master/static/imgs/screenshot.png)
 
 > 管理 Docker Container 不在本项目的范围之内, 这是 [Kubernetes](https://kubernetes.io/) 这种容器管理平台做的事情  
 > 本项目旨在为容器 Web 云服务平台提供一个与已运行的 Docker Container 建立终端通信的后端服务  
