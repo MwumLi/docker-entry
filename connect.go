@@ -3,6 +3,8 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"crypto/md5"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -11,6 +13,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -29,8 +32,9 @@ type Connect struct {
 	shell string
 	// 一个可执行实例 ID
 	execId string
-	// token 是否失效
-	tokenEffect bool
+	// 外部应用来连接
+	token     string
+	tokenLock *sync.Mutex
 }
 
 func NewConnectItemWithOpts(ops ...func(*Connect) error) (*Connect, error) {
@@ -227,4 +231,19 @@ func (c *Connect) Resize(w, h int) error {
 
 func (c *Connect) String() string {
 	return fmt.Sprintf("node: %s container: %s execId: %s", c.node, c.container, c.execId)
+}
+
+func (c *Connect) generateToken() string {
+	// generate token
+	ns := strconv.FormatInt(time.Now().UnixNano(), 10)
+	b := md5.Sum([]byte(c.String() + ns))
+	token := hex.EncodeToString(b[:])
+
+	c.token = token
+	c.tokenLock = new(sync.Mutex)
+	return token
+}
+
+func (c *Connect) emptyToken() {
+	c.token = ""
 }

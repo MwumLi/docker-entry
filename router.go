@@ -10,8 +10,6 @@ import (
 	"net"
 	"net/http"
 	"sort"
-	"strconv"
-	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/julienschmidt/httprouter"
@@ -123,12 +121,8 @@ func apiSignExec(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 		return
 	}
 
-	// generate token
-	ns := strconv.FormatInt(time.Now().UnixNano(), 10)
-	b := md5.Sum([]byte(c.String() + ns))
-	token := hex.EncodeToString(b[:])
-
 	// save connect instance to Connects store
+	token := c.generateToken()
 	Connects[token] = c
 
 	log.Printf("[Add]Token: %s Total: %d\n", token, len(Connects))
@@ -148,6 +142,16 @@ func wsTerminal(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	}
 	// Avoid tokens being used again, so delete connect instance from Connects stor
 	delete(Connects, token)
+
+	// Lock to empty token, only one at the same time can enter
+	item.tokenLock.Lock()
+	if item.token == "" {
+		w.WriteHeader(401)
+		fmt.Fprintf(w, "Token '%s' has expired", token)
+		return
+	}
+	item.emptyToken()
+	item.tokenLock.Unlock()
 
 	// websocket
 	ws, err := upgrader.Upgrade(w, r, nil)
