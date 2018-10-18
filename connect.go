@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"net"
 	"net/http"
 	"net/url"
@@ -180,21 +179,18 @@ func (c *Connect) Start() (*HijackedResponse, error) {
 	}
 
 	br := bufio.NewReader(conn)
-	// ignore first response
+	// Ignore upgrade response header
 	for {
 		s := ""
 		if s, err = br.ReadString('\n'); err != nil {
 			return nil, err
 		} else {
 			s = strings.TrimSpace(s)
-			// fmt.Print("Discard " + s)
 		}
 		if len(s) <= 0 {
 			break
 		}
 	}
-	// first send '\r'
-	fmt.Fprint(conn, "\r")
 	return &HijackedResponse{conn, br}, nil
 }
 

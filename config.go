@@ -12,8 +12,7 @@ var defaultConf = Configuration{
 	Docker_serve_port:  2375,
 	Docker_api_version: "v1.24",
 	Listen:             "127.0.0.1:8888",
-	Enable_sign:        true,
-	App_keys:           map[string]string{"aa": "bb"},
+	Quick_Start:        true,
 }
 
 func loadConf(path string) Configuration {
@@ -25,7 +24,9 @@ func loadConf(path string) Configuration {
 		}
 		return defaultConf
 	}
-	from := &Configuration{}
+	from := &Configuration{
+		Quick_Start: true,
+	}
 	json.NewDecoder(file).Decode(&from)
 
 	to := defaultConf
@@ -34,6 +35,18 @@ func loadConf(path string) Configuration {
 }
 
 func mergeConf(to, from *Configuration) {
+	if from.Enable_sign {
+		to.Enable_sign = from.Enable_sign
+	}
+
+	if from.Debug {
+		to.Debug = from.Debug
+	}
+
+	if from.Quick_Start == false {
+		to.Quick_Start = from.Quick_Start
+	}
+
 	if len(from.App_keys) > 0 {
 		to.App_keys = from.App_keys
 	}

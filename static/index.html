@@ -1,0 +1,44 @@
+<!doctype html>
+<html>
+
+<head>
+  <title>Docker Entry demo</title>
+  <link rel="stylesheet" href="/static/xtermjs.3.8.0/xterm.css" />
+  <link rel="stylesheet" href="/static/xtermjs.3.8.0/addons/fullscreen/fullscreen.css" />
+  <link rel="stylesheet" href="/static/style.css" />
+  <script src="/static/es6-promise/4.1.1/es6-promise.auto.min.js"></script>
+  <script src="/static/fetch/1.0.0/fetch.min.js"></script>
+</head>
+
+<body>
+  <h1 style="color: #2D2E2C">Docker Entry Demo</h1>
+  <div class="connect clearfix">
+    <ul>
+      {{if .Enable_sign}}
+      <li>APP:
+        <select name="app" id="app">
+          {{range $k, $v := .App_keys}}
+          <option value="{{$v}}">{{$k}}</option>
+          {{end}}
+        </select>
+      </li>
+      {{end}}
+      <li>Node: <input type="text" id="node" placeholder="Docker部署服务器IP"></li>
+      <li>Container: <input type="text" id="container" placeholder="Docker容器的ID或名字"></li>
+      <li><button onclick="connect()">Connect</button></li>
+    </ul>
+  </div>
+  <div id="terminal-container"></div>
+  <script src="/static/xtermjs.3.8.0/xterm.js" defer></script>
+  <!-- <script src="/static/xtermjs.3.8.0/addons/attach/attach.js" defer></script> -->
+  <script src="/static/attach.js" defer></script>
+  <script src="/static/xtermjs.3.8.0/addons/fit/fit.js" defer></script>
+  <script src="/static/xtermjs.3.8.0/addons/fullscreen/fullscreen.js" defer></script>
+  <script src="/static/xtermjs.3.8.0/addons/search/search.js" defer></script>
+  <script src="/static/xtermjs.3.8.0/addons/webLinks/webLinks.js" defer></script>
+  <script src="/static/xtermjs.3.8.0/addons/winptyCompat/winptyCompat.js" defer></script>
+  <script src="/static/md5.min.js" defer></script>
+  <script src="/static/index.js" defer></script>
+</body>
+
+</html>

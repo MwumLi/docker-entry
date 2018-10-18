@@ -163,6 +163,7 @@ func wsTerminal(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 
 	// read data from websocket and send it to docker
 	readFromWSToDocker(ws, hj.Conn, item)
+	log.Printf("ToTal: %d deleteId: %s\n", len(Connects), item.execId)
 }
 
 // read data from websocket and send it to docker
@@ -176,8 +177,10 @@ func readFromWSToDocker(ws *websocket.Conn, docker net.Conn, c *Connect) {
 		switch wm.Type {
 		case DataMessage:
 			data := wm.Data
-			fmt.Fprintf(docker, "%s", data)
-			fmt.Printf("websocket: %s %d\n", data, len(data))
+			if Config.Debug == true {
+				fmt.Printf("WS: %s []byte: %v []rune: %+v\n", data, []byte(data), []rune(data))
+			}
+			docker.Write([]byte(wm.Data))
 		case ResizeMessage:
 			if err := c.Resize(wm.W, wm.H); err != nil {
 				wm = WebsocketMessage{
@@ -197,15 +200,45 @@ func readFromWSToDocker(ws *websocket.Conn, docker net.Conn, c *Connect) {
 // read data from docker and send it to websocket
 func readFromDockerToWS(ws *websocket.Conn, docker *bufio.Reader) {
 	for {
-		data, err := docker.ReadString('\n')
+		b := make([]byte, 1024)
+		n, err := docker.Read(b)
 		if err != nil {
 			break
+		}
+		b = b[:n]
+		data := Uint8ArrayToString(b)
+		if Config.Debug {
+			s := string(b)
+			fmt.Printf("Docker: %s origin: %s []byte: %v []rune: %v\n", data, string(b), b, []rune(s))
 		}
 		wm := WebsocketMessage{
 			Type: DataMessage,
 			Data: data,
 		}
 		ws.WriteJSON(wm)
-		fmt.Printf("docker: %s\n", data)
 	}
+}
+
+// Remove garbled characters before line breaks
+func Uint8ArrayToString(b []byte) string {
+	var out string
+
+	for i, len := 0, len(b); i < len; i++ {
+		c := b[i]
+		switch c >> 4 {
+		case 0, 1, 2, 3, 4, 5, 6, 7:
+			out += string(c)
+		case 12, 13:
+			c1 := b[i]
+			i++
+			out += string(((c & 0x1F) << 6) | (c1 & 0x3F))
+		case 14:
+			c1 := b[i]
+			i++
+			c2 := b[i]
+			out += string(((c & 0x0F) << 12) | ((c1 & 0x3F) << 6) | ((c2 & 0x3F) << 0))
+		}
+	}
+
+	return out
 }

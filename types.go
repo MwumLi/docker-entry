@@ -54,6 +54,8 @@ type HijackedResponse struct {
 }
 
 type Configuration struct {
+	Quick_Start        bool
+	Debug              bool
 	App_keys           map[string]string
 	Enable_sign        bool
 	Docker_proto       string
