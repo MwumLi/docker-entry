@@ -4,9 +4,12 @@ import (
 	"encoding/json"
 	"log"
 	"os"
+	"os/signal"
+	"syscall"
 )
 
-// ToDo: remove Enable_sign and App_keys when finished
+const SYSTEM_PATH = "/etc/docker-entry.json"
+
 var defaultConf = Configuration{
 	Docker_proto:       "http",
 	Docker_serve_port:  2375,
@@ -31,6 +34,8 @@ func loadConf(path string) Configuration {
 
 	to := defaultConf
 	mergeConf(&to, from)
+
+	log.Printf("Load Config\n")
 	return to
 }
 
@@ -61,5 +66,14 @@ func mergeConf(to, from *Configuration) {
 
 	if from.Listen != "" {
 		to.Listen = from.Listen
+	}
+}
+
+func reloadConf(path string) {
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, syscall.SIGUSR1)
+	for {
+		<-c
+		Config = loadConf(path)
 	}
 }
